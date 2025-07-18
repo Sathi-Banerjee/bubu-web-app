@@ -1,0 +1,51 @@
+body {
+  background: #0a0011;
+  color: #fff;
+  font-family: 'Segoe UI', sans-serif;
+  text-align: center;
+  padding: 20px;
+}
+
+.container {
+  max-width: 600px;
+  margin: auto;
+}
+
+#chatbox {
+  background: #1a001f;
+  border: 2px solid #cc00cc;
+  border-radius: 10px;
+  padding: 15px;
+  height: 400px;
+  overflow-y: auto;
+  margin-bottom: 15px;
+  text-align: left;
+}
+
+.user {
+  color: #ff80aa;
+  margin-bottom: 10px;
+}
+
+.bubu {
+  color: #99ffcc;
+  margin-bottom: 15px;
+}
+
+input[type="text"] {
+  padding: 10px;
+  width: 75%;
+  border: 1px solid #cc00cc;
+  border-radius: 5px;
+  background: #2b0033;
+  color: #fff;
+}
+
+button {
+  padding: 10px 15px;
+  background: #cc00cc;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
