@@ -3,17 +3,17 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import os
 
-# Load environment variables
+# Load .env variables
 load_dotenv()
 api_key = os.getenv("OPENROUTER_API_KEY")
 
-# Configure OpenRouter client
+# OpenAI client for OpenRouter
 client = OpenAI(
     api_key=api_key,
     base_url="https://openrouter.ai/api/v1"
 )
 
-# Flask app setup
+# Flask app config
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 @app.route("/")
@@ -22,14 +22,28 @@ def home():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    user_input = request.json.get("message")
+    user_input = request.json.get("message", "").lower().strip()
+
+    # Predefined introduction triggers
+    greetings = ["hi", "hello", "hii", "hey"]
+    identity_questions = ["who created you", "who are you", "what are you"]
+
+    if any(greet in user_input for greet in greetings) or any(q in user_input for q in identity_questions):
+        reply = "Hello! I am Bubu 🧸, an AI assistant created by Sathi Banerjee. How can I help you today?"
+        return jsonify({"reply": reply})
+
     try:
+        system_message = (
+            "You are Bubu 🧸, a helpful AI assistant created by Sathi Banerjee. "
+            "Do not repeatedly introduce yourself. Just answer the user clearly and helpfully."
+        )
+
+        messages = [{"role": "system", "content": system_message}]
+        messages.append({"role": "user", "content": user_input})
+
         response = client.chat.completions.create(
             model="openai/gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are Bubu, a helpful and polite AI assistant created by Sathi Banerjee."},
-                {"role": "user", "content": user_input}
-            ]
+            messages=messages
         )
         reply = response.choices[0].message.content
         return jsonify({"reply": reply})
