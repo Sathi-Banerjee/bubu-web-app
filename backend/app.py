@@ -3,14 +3,17 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import os
 
+# Load environment variables
 load_dotenv()
 api_key = os.getenv("OPENROUTER_API_KEY")
 
+# Configure OpenRouter client
 client = OpenAI(
     api_key=api_key,
     base_url="https://openrouter.ai/api/v1"
 )
 
+# Flask app setup
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 @app.route("/")
@@ -34,4 +37,5 @@ def chat():
         return jsonify({"reply": f"[Error] {e}"}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
