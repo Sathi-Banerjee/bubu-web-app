@@ -1,7 +1,15 @@
 services:
   - type: web
-    name: bubu-web-app
+    name: bubu-ai-assistant
     env: python
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "python backend/app.py"
-    pythonVersion: 3.10.13
+    plan: free
+    branch: main
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: python backend/main.py
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: WEATHER_API_KEY
+        sync: false
+      - key: NEWS_API_KEY
+        sync: false
