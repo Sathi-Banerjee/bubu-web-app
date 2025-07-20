@@ -1,51 +1,99 @@
+/* Make entire page take full screen */
 body {
-  background: #0a0011;
-  color: #fff;
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+  background: url('your-background-stars.jpg') no-repeat center center fixed;
+  background-size: cover;
   font-family: 'Segoe UI', sans-serif;
-  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+}
+
+/* Centered square chat container */
+.chat-container {
+  background-color: rgba(128, 0, 128, 0.3);
+  border: 2px solid #ff00ff;
+  border-radius: 15px;
   padding: 20px;
-}
-
-.container {
+  width: 90%;
   max-width: 600px;
-  margin: auto;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 20px #ff00ff;
+  overflow: hidden;
 }
 
-#chatbox {
-  background: #1a001f;
-  border: 2px solid #cc00cc;
-  border-radius: 10px;
-  padding: 15px;
-  height: 400px;
-  overflow-y: auto;
-  margin-bottom: 15px;
-  text-align: left;
-}
-
-.user {
-  color: #ff80aa;
+/* Title */
+.chat-container h1 {
+  text-align: center;
+  color: #ffccff;
   margin-bottom: 10px;
 }
 
-.bubu {
-  color: #99ffcc;
-  margin-bottom: 15px;
+/* Chat box area */
+#chatbox {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 10px;
+  border-radius: 10px;
+  background-color: rgba(0, 0, 0, 0.4);
+  margin-bottom: 10px;
 }
 
-input[type="text"] {
+/* Input bar */
+.input-row {
+  display: flex;
+  gap: 10px;
+}
+
+#userInput {
+  flex-grow: 1;
   padding: 10px;
-  width: 75%;
-  border: 1px solid #cc00cc;
-  border-radius: 5px;
-  background: #2b0033;
-  color: #fff;
+  border-radius: 10px;
+  border: none;
+  font-size: 16px;
+  background-color: #222;
+  color: white;
 }
 
 button {
-  padding: 10px 15px;
-  background: #cc00cc;
+  padding: 10px 20px;
+  background-color: #ff00ff;
   color: white;
   border: none;
-  border-radius: 5px;
+  border-radius: 10px;
+  font-size: 16px;
   cursor: pointer;
+}
+
+/* Messages */
+.user {
+  text-align: right;
+  color: #00ffff;
+  margin: 5px 0;
+}
+
+.bubu {
+  text-align: left;
+  color: #ffccff;
+  margin: 5px 0;
+  white-space: pre-wrap;
+}
+
+.bubu.error {
+  color: red;
+}
+
+.dots {
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
