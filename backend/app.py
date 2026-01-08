@@ -1,175 +1,265 @@
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
-import os, requests, json
 from openai import OpenAI
 from datetime import date
+from pathlib import Path
+from PIL import Image
+import pytesseract
+import os, requests, json, re
 
-# 🔐 Load environment variables
-load_dotenv()
+# =========================
+# 🔐 ENV & CONFIG
+# =========================
+env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
-# 🔑 API Keys
-client = OpenAI(api_key=os.getenv("OPENROUTER_API_KEY"), base_url="https://openrouter.ai/api/v1")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 WEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 
-# 🚀 Flask App
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+client = OpenAI(
+    api_key=OPENROUTER_API_KEY,
+    base_url="https://openrouter.ai/api/v1"
+)
+
+# =========================
+# 🚀 FLASK APP
+# =========================
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
-# 🧠 Initial chat memory
+# =========================
+# 🧠 MEMORY
+# =========================
 chat_history = [
     {
         "role": "system",
         "content": (
-            "You are Bubu 🧸, an AI assistant created by Sathi Banerjee. "
-            "Always use the current date provided by the backend. "
-            "Do not assume today's date. Provide accurate weather, news, age, and web info. "
-            "If you are unsure, fallback to a web search."
+            "You are Bubu 🧸, a warm, friendly, emotionally intelligent AI assistant "
+            "created by Sathi Banerjee.\n"
+            "Talk naturally like a human. Be caring and friendly. "
+            "Never say you lack real-time data."
         )
     }
 ]
 
-# ✅ Get real system date
+MAX_HISTORY = 10
+last_intent = None
+last_city = None
+
+# =========================
+# 🛠️ HELPERS
+# =========================
 def get_today():
     return date.today()
 
-# 🎂 Calculate age
-def calculate_age(birth_year, birth_month, birth_day):
-    today = get_today()
-    age = today.year - birth_year
-    if (birth_month, birth_day) > (today.month, today.day):
-        age -= 1
-    return age
+def extract_city(text):
+    match = re.search(r"(?:in|at|of)\s+([a-zA-Z\s]+)", text, re.I)
+    return match.group(1).strip() if match else ""
 
-# 🌦️ Weather Info
+def is_greeting(text):
+    return any(w in text for w in [
+        "hi", "hello", "hey", "hii", "hola", "good morning", "good evening"
+    ])
+
+def detect_emotion(text):
+    if any(w in text for w in ["sad", "cry", "lonely", "depressed", "tired"]):
+        return "sad"
+    if any(w in text for w in ["happy", "excited", "great", "awesome"]):
+        return "happy"
+    if any(w in text for w in ["angry", "mad", "annoyed"]):
+        return "angry"
+    return None
+
+def is_news_keyword(text):
+    return "news" in text
+
+# =========================
+# 🌦️ WEATHER
+# =========================
 def get_weather(city):
-    if not city:
-        return "⚠️ Please specify a city like 'weather in Kolkata'."
     url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric"
     try:
         res = requests.get(url).json()
         if res.get("cod") != 200:
-            return f"⚠️ Couldn't find weather for '{city}'."
+            return f"Hmm 🤔 I couldn’t find weather for {city.title()}."
+
         desc = res["weather"][0]["description"].capitalize()
         temp = res["main"]["temp"]
-        return f"🌦️ Weather in {city.title()}: {desc}, {temp:.1f}°C"
-    except Exception as e:
-        return f"⚠️ [Weather Error] {e}"
+        hum = res["main"]["humidity"]
 
-# 🗞️ News Info
+        return (
+            f"🌦️ Weather in {city.title()}:\n"
+            f"• Condition: {desc}\n"
+            f"• Temperature: {temp:.1f}°C\n"
+            f"• Humidity: {hum}%"
+        )
+    except:
+        return "Oops 😵 weather service is having trouble."
+
+# =========================
+# 🗞️ NEWS
+# =========================
 def get_news(topic=None):
-    if topic:
-        url = f"https://newsapi.org/v2/everything?q={topic}&apiKey={NEWS_API_KEY}"
-    else:
-        url = f"https://newsapi.org/v2/top-headlines?country=in&apiKey={NEWS_API_KEY}"
+    url = (
+        f"https://newsapi.org/v2/everything?q={topic}&apiKey={NEWS_API_KEY}"
+        if topic else
+        f"https://newsapi.org/v2/top-headlines?country=in&apiKey={NEWS_API_KEY}"
+    )
     try:
         res = requests.get(url).json()
         articles = res.get("articles", [])[:3]
-        if not articles:
-            return "📰 No relevant news found."
-        reply = "🗞️ Top Headlines:\n"
-        for a in articles:
-            reply += f"🔹 {a['title']}\n{a['url']}\n"
-        return reply
-    except Exception as e:
-        return f"⚠️ [News Error] {e}"
 
-# 🔍 Web Search Fallback
+        if not articles:
+            return "No news right now 🗞️"
+
+        reply = "📰 Here’s the latest:\n\n"
+        for a in articles:
+            reply += f"🔹 {a['title']}\n{a['url']}\n\n"
+        return reply
+    except:
+        return "News service is unavailable 😴"
+
+# =========================
+# 🔍 WEB SEARCH
+# =========================
 def search_web(query):
     headers = {"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"}
     data = json.dumps({"q": query})
-    try:
-        res = requests.post("https://google.serper.dev/search", headers=headers, data=data)
-        results = res.json().get("organic", [])
-        if not results:
-            return "🔍 No relevant info found online."
-        reply = "🔎 Top web results:\n"
-        for r in results[:3]:
-            reply += f"🔹 {r['title']}\n{r['link']}\n"
-        return reply
-    except Exception as e:
-        return f"⚠️ [Web Search Error] {e}"
+    res = requests.post("https://google.serper.dev/search", headers=headers, data=data)
+    results = res.json().get("organic", [])[:3]
 
-# 🏠 Home route
+    if not results:
+        return "I couldn’t find anything useful 😔"
+
+    reply = "🔎 I found this:\n\n"
+    for r in results:
+        reply += f"🔹 {r['title']}\n{r['link']}\n\n"
+    return reply
+
+# =========================
+# 🏠 HOME
+# =========================
 @app.route("/")
 def home():
     return render_template("index.html")
 
-# 🤖 Chat route
-# 🤖 Chat route
+# =========================
+# 🤖 CHAT
+# =========================
 @app.route("/chat", methods=["POST"])
 def chat():
-    import re  # you can also put this import at the top of your file
+    global last_intent, last_city
 
     msg = request.json.get("message", "").strip()
+    lower = msg.lower()
+
     chat_history.append({"role": "user", "content": msg})
-    lower_msg = msg.lower()
+    chat_history[:] = chat_history[-MAX_HISTORY:]
 
-    # 📅 Today's date
-    if "date" in lower_msg or "today" in lower_msg:
-        today = get_today()
-        g_date = f"📅 Today is {today.strftime('%B %d, %Y')}"
-        reply = f"{g_date}"
+    # 👋 Greeting
+    if is_greeting(lower):
+        reply = "Heyyy! 🧸✨ How are you feeling today?"
         chat_history.append({"role": "assistant", "content": reply})
         return jsonify({"reply": reply})
 
-    # 🌤️ Weather
-    if "weather" in lower_msg:
-        city_match = re.search(r'weather\s*(?:in|at|of)?\s*([a-zA-Z\s]+)', msg, re.IGNORECASE)
-        if city_match:
-            city = city_match.group(1).strip()
+    # 💖 Emotion
+    emotion = detect_emotion(lower)
+    if emotion == "sad":
+        reply = "Aww 🫂 I’m here for you. Want to talk about it?"
+        chat_history.append({"role": "assistant", "content": reply})
+        return jsonify({"reply": reply})
+
+    if emotion == "happy":
+        reply = "That’s lovely 😄✨ Tell me more!"
+        chat_history.append({"role": "assistant", "content": reply})
+        return jsonify({"reply": reply})
+
+    if emotion == "angry":
+        reply = "I can feel the frustration 😤 I’m listening."
+        chat_history.append({"role": "assistant", "content": reply})
+        return jsonify({"reply": reply})
+
+    # 🌦️ WEATHER REQUEST
+    if "weather" in lower:
+        city = extract_city(msg)
+
+        if city:
+            last_city = city
+            reply = get_weather(city)
+            last_intent = None
         else:
-            city = msg.split()[-1]
+            last_intent = "weather"
+            reply = "Sure ☁️ Which city’s weather should I check?"
+
+        chat_history.append({"role": "assistant", "content": reply})
+        return jsonify({"reply": reply})
+
+    # 🌆 WEATHER FOLLOW-UP
+    if last_intent == "weather":
+        city = msg.strip()
+        last_city = city
         reply = get_weather(city)
+        last_intent = None
+
         chat_history.append({"role": "assistant", "content": reply})
         return jsonify({"reply": reply})
 
-    # 🗞️ News
-    if "news" in lower_msg:
-        topic = lower_msg.split("news")[-1].strip() or None
-        reply = get_news(topic)
+    # ❓ WHERE?
+    if lower in ["where", "where?", "which place"] and last_city:
+        reply = f"In {last_city.title()} 🌆"
         chat_history.append({"role": "assistant", "content": reply})
         return jsonify({"reply": reply})
 
-    # 👤 Virat Kohli age
-    if "virat kohli age" in lower_msg or "his age" in lower_msg:
-        birth_year, birth_month, birth_day = 1988, 11, 5
-        age = calculate_age(birth_year, birth_month, birth_day)
-        today_str = get_today().strftime("%B %d, %Y")
-        reply = f"Virat Kohli was born on November 5, 1988. As of today, {today_str}, he is {age} years old."
+    # 🗞️ NEWS
+    if is_news_keyword(lower):
+        reply = get_news()
         chat_history.append({"role": "assistant", "content": reply})
         return jsonify({"reply": reply})
 
-    # 💬 GPT fallback
+    # 📅 DATE
+    if "date" in lower or "today" in lower:
+        reply = f"📅 Today is {get_today().strftime('%B %d, %Y')}"
+        chat_history.append({"role": "assistant", "content": reply})
+        return jsonify({"reply": reply})
+
+    # 🤖 GPT FALLBACK
     try:
-        # 🧠 Remove old date reminders from history
-        chat_history[:] = [m for m in chat_history if not m.get("content", "").startswith("📅 Today is")]
-
-        # 📅 Add today's date as system info
-        today_str = f"📅 Today is {get_today().strftime('%B %d, %Y')}."
-        chat_history.insert(1, {
-            "role": "system",
-            "content": today_str + " Always use this as the current date."
-        })
-
         response = client.chat.completions.create(
             model="openai/gpt-3.5-turbo",
-            messages=chat_history
+            messages=chat_history,
+            temperature=0.8,
+            max_tokens=800
         )
+
         reply = response.choices[0].message.content.strip()
-
-        if any(p in reply.lower() for p in ["i'm not sure", "i don't know", "can't find"]):
-            reply = search_web(msg)
-
         chat_history.append({"role": "assistant", "content": reply})
         return jsonify({"reply": reply})
 
     except Exception as e:
-        return jsonify({"reply": f"⚠️ [Error] {str(e)}"}), 500
+        return jsonify({"reply": f"Error 😢 {e}"}), 500
 
+# =========================
+# 📷 IMAGE OCR
+# =========================
+@app.route("/analyze-image", methods=["POST"])
+def analyze_image():
+    image = request.files["image"]
+    os.makedirs("temp", exist_ok=True)
+    path = os.path.join("temp", image.filename)
+    image.save(path)
 
-# 🔥 Run the server
+    try:
+        img = Image.open(path)
+        text = pytesseract.image_to_string(img)[:2000]
+        return jsonify({"text": f"📷 I found this text:\n\n{text}"})
+    finally:
+        os.remove(path)
+
+# =========================
+# 🔥 RUN
+# =========================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
-
-
